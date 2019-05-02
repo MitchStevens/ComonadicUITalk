@@ -1,22 +1,9 @@
 ---
 title: Comonadic Interface Design
-subtitle: Your ticket for the good life
+subtitle: Potentially the next big thing
 author: Mitch Stevens
 theme: Boadilla
 ---
-
-
-# Time to invest in comonads!
-- **Duplicate** investment in months
-
-
-# The next big thing
-## Who's using them?
-
-
-- co-log [^1]
-
-[^1]: https://hackage.haskell.org/package/co-log
 
 
 # Comonads
@@ -38,8 +25,6 @@ class Comonad w where
 - Using `extract`, we can extract the value that we were focusing on
 <!-- extract is pretty intuitive here -->
 
-. . .
-
 ![A Scomonad focused on something](angry-scott-morrison.jpg){ width=30% }
 
 . . .
@@ -49,22 +34,7 @@ class Comonad w where
 
 [^#]: https://blog.functorial.com/posts/2016-08-07-Comonads-As-Spaces.html
 
-#The Zipper Comonad
-```haskell
-data Zipper a = [a] a [a]
-
-left, right :: Zipper a -> Zipper a
-left  (Zipper (l:ls) v rs) = Zipper ls l (v:rs)
-right (Zipper ls v (r:rs)) = Zipper (v:ls) r rs
-
-instance Comonad Zipper where
-  extract (Zipper l v r) = v
-  duplicate zipper = Zipper allLefts zipper allRights
-    where ...
-```
-
-
-# Extracting and Duplicating
+# NonEmpty List
 ```haskell
 data NonEmptyList a = NonEmptyList a [a]
 
@@ -77,14 +47,27 @@ instance Comonad Zipper where
     where ...
 ```
 
-# Examples
+
+# NonEmpty Graph as a Comonad
+```haskell
+data NEGraph a = -- Complicated Stuff here
+
+focusUpon :: NEGraph a -> a -> NEGraph a
+focusUpon graph focus = -- TODO: focusUpon 
+
+instance Comonad NEGraph where
+    extract = -- TODO: extract
+    duplicate graph = fmap (focusUpon graph) graph
+
+```
+
+# Other Comonads
 - `Identity a`
 - `(e, a)`
-- Nonempty Graphs [^#]
+- Zippers
 - `Trees with values in the branches (Cofree f)`
 <!-- Some trees have values at the branches, some have values at the edges -->
 
-[^#]: https://hackage.haskell.org/package/fgl
 
 
 # Kliesli and Cokliesli
