@@ -20,6 +20,8 @@ class Comonad w where
 <!-- Or that a value can be obtained -->
 <!-- You've already got an a, you can extract it out at anytime. But there is a whole bunch of information AROUND the value that is also useful -->
 
+----
+
 # Extracting and Duplicating
 - Comonads can be seen as a state transition diagram [^#]
 - Using `extract`, we can extract the value that we were focusing on
@@ -34,6 +36,8 @@ class Comonad w where
 
 [^#]: https://blog.functorial.com/posts/2016-08-07-Comonads-As-Spaces.html
 
+----
+
 # NonEmpty List
 ```haskell
 data NonEmptyList a = NonEmptyList a [a]
@@ -47,6 +51,7 @@ instance Comonad Zipper where
     where ...
 ```
 
+----
 
 # NonEmpty Graph as a Comonad
 ```haskell
@@ -61,6 +66,8 @@ instance Comonad NEGraph where
 
 ```
 
+----
+
 # Other Comonads
 - `Identity a`
 - `(e, a)`
@@ -68,7 +75,7 @@ instance Comonad NEGraph where
 - `Trees with values in the branches (Cofree f)`
 <!-- Some trees have values at the branches, some have values at the edges -->
 
-
+----
 
 # Kliesli and Cokliesli
 <!-- So what else can we do with comonads? -->
@@ -86,6 +93,7 @@ instance Comonad NEGraph where
 (=>=) :: (w a -> b) -> (w b -> c) -> (w a -> c)
 ```
 
+----
 
 # Uses for Comonads
 Image processing is a natural fit for Cokliesli composition[^#]
@@ -103,6 +111,7 @@ lighten =>= blur =>= render
 
 [^#]: https://jaspervdj.be/posts/2014-11-27-comonads-image-processing.html
 
+----
 
 # What is a UI?
 * The only hard requirement is a rendering function...
@@ -127,6 +136,7 @@ data NaiveUI s h = UI
 * This would allow us to `fmap` over `h` to render to something else.
 * `UI` admits a comonad instance
 
+----
 
 # The store comonad
 - The `NaiveUI` comonad is usually called `Store`
@@ -142,6 +152,7 @@ Store s (Store s a) = Store (s -> Store s a) s
 ```
 <!-- The duplicate function looks something -->
 
+----
 
 # Components using Comonads
 ```haskell
@@ -160,6 +171,7 @@ select :: x -> w (Component w) -> Component w -- choose
 <!-- `select` is a function that takes something that selects a posible future from the model of all posible futures `w (w a)`, using a type called `x`.  -->
 <!-- It's not clear that we can write a general `select` function that does what we want, or what `x` should be. We can start by saying that it should depend on `w` -->
 
+----
 
 # Adjunctions
  - An adjuction is a relationship between two functors `f` and `g`.
@@ -188,6 +200,7 @@ unit   :: Adjunction w m => a -> m (w a)
 counit :: Adjunction w m => w (m a) -> a
 ``` -->
 
+----
 
 # Examples of Monad/Comonad Adjunctions
 
@@ -206,6 +219,7 @@ instance Adjunction w m =>
   instance Adjunction (EnvT r w) (ReaderT r m)
 ```
 
+----
 
 # The Reader/Env Pairing
 ```haskell
@@ -222,6 +236,7 @@ Adjunction requirements:
 ```
 <!-- Go through the algebra to show that 1 is curry and 2 is uncurry -->
 
+----
 
 # An utterly surprising result! 
 `m ()` can be used to navigate through `w a`
@@ -236,44 +251,82 @@ select :: Adjunction w m => m () -> w (w a) -> w a
 
 If `w` has a right adjunct `m`, we get a navigation type for free
 
+----
 
 # Overview
-We have developed a way of 
+We have a new model for modeling UIs. This model can
+  - Eas
 
 
 ```haskell
-extract :: Component w -> UI ()                  -- render
+type Component w = w UI
+
+extract :: Component w -> UI                     -- render
 duplicate :: Component w -> w (Component w)      -- explode
 select :: m () -> w (Component w) -> Component w -- choose
 ```
 
-
+----
 
 # Applications
 We want to be able to compose comonadic components
 
-> The limerick packs laughs anatomical
-> In space that is quite economical.
->    But the good ones I've seen
->    So seldom are clean
-> And the clean ones so seldom are comical
-
+----
 
 # Comonadic Sum
-~~~
-data A f a =
-  A (m x -> b) (f x)
-~~~
 
-# Comonadic Product
-Use case
+A sum of comonads is itself a comonad
 
 ```haskell
+-- from Data.Functor.Sum
+data Sum f g a = InL (f a) | InR (g a)
+instance (Comonad f, Comonad g) => Comonad (Sum f g) where
+```
+
+This would represent **two** UI components, with a single component visible at any given time.
+
+For performance and ease of use, we need a comonad that can store both `f` and `g`.
+
+----
+
+# Comonadic Sum
+
+From the paper **Declarative UIs are the Future - And the Future is Comonadic**, we get a different comonadic sum
+```haskell
+data Sum f g a = Sum Bool (f a) (g a)
+instance (Comonad f, Comonad g) => Comonad (Sum f g) where ...
+```
+
+----
+
+# Comonadic Product
+A comonadic product is poses problems; it doesn't have a comonad instance
+
+```haskell
+-- from Data.Functor.Product
+data Product f g a = Pair (f a) (g a)
+```
+
+----
+
+# Comonadic product 
+
+Again from **The future is Comonadic**, Freeman suggests using `Day` to represent a comonadic product:
+
+```haskell
+-- from Data.Functor.Day
 data Day f g a =
   Day (x -> y -> a) (f x) (g y)
 instance Comonad f, Comonad g => Comonad (Day f g)
 ```
 
+We can use the Day convolution to make combinators for UI components
+
+```haskell
+above, below, before, after :: f UI -> g UI -> Day f g UI
+```
+
+----
 
 # Homogenous Transformers
 ## Monad Transformers
@@ -289,6 +342,8 @@ class MonadTrans t where
 class ComonadTrans t where
   lower :: Comonad w => t w a -> t a
 ```
+
+----
 
 # Co
 `Co` is a heterogenous transformer
@@ -306,6 +361,7 @@ Given a comonad `w`, `Co w` is a monad
 
 Whats more, this new monad `Co w` is right adjunct to `w`, meaning we get a way to move around `w a` for free.
 
+----
 
 # Co Zipper
 Zippers are an example of an comonad with no obvious monad pairing.[^#]
@@ -325,6 +381,7 @@ moveLeft = Co $ \z -> extract (left z) ()
 
 [^#]: A Real-World Application with a Comonadic User Interface, Arthur Xavier, 2018
 
+----
 
 # Handling arbitrary effects
 Given that `Co w` is a monad, why not add another parameter `m` for effects
@@ -333,11 +390,15 @@ Given that `Co w` is a monad, why not add another parameter `m` for effects
 newtype CoT w m a = CoT { runCoT :: w (a -> m r) -> m r }
 ```
 
+----
+
 # Message Passing
 - Use Free Monads:
     - Functor `QueryF a` to model messages to a component
     - `eval :: Free QueryF a -> m a` evaluates these messages
 - 
+
+---
 
 # Interesting Ideas
 - Comonad transformer stacks
