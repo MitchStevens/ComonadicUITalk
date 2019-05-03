@@ -2,11 +2,26 @@
 title: Comonadic Interface Design
 subtitle: Potentially the next big thing
 author: Mitch Stevens
-theme: Boadilla
+theme: Copenhagen
 ---
 
+# History of Comonadic UIs
+
+Phil Freeman wrote exploratory blog posts + a short paper about a novel way of creating UIs
+
+. . .
+
+Later Freeman would supervise a bachelor thesis by Arthur Xavier extending his orginal concept
+
+. . .
+
+This presentation is an overview of posts/papers on the subject thus far
+
+----
 
 # Comonads
+
+## Whats a comonad? {.columns2}
 - **Comonads** are dual structure to Monads
 - Monads express effectful computations
 - Comonads are values in some context
@@ -23,7 +38,6 @@ class Comonad w where
 ----
 
 # Extracting and Duplicating
-- Comonads can be seen as a state transition diagram [^#]
 - Using `extract`, we can extract the value that we were focusing on
 <!-- extract is pretty intuitive here -->
 
@@ -33,8 +47,6 @@ class Comonad w where
 
 - `duplicate` explodes out all the states of the transition
 <!-- This is less obvious, some examples will be needed if you have never seena comonad before. -->
-
-[^#]: https://blog.functorial.com/posts/2016-08-07-Comonads-As-Spaces.html
 
 ----
 
@@ -68,37 +80,21 @@ instance Comonad NEGraph where
 
 ----
 
-# Other Comonads
-- `Identity a`
-- `(e, a)`
-- Zippers
-- `Trees with values in the branches (Cofree f)`
-<!-- Some trees have values at the branches, some have values at the edges -->
+# Comonads
 
-----
-
-# Kliesli and Cokliesli
-<!-- So what else can we do with comonads? -->
-- A function `a -> m b` is called a Kliesli arrow
-- If `m` is a monad, we get Kliesli composition for free
-```haskell
-(>=>) :: (a -> m b) -> (b -> m c) -> (a -> m c)
-```
-
-. . .
-
-- The dual to a Kliesli arrow is a Cokliesli arrow
-- If `w` is a comonad, we also get Cokliesli composition
-```haskell
-(=>=) :: (w a -> b) -> (w b -> c) -> (w a -> c)
-```
+## Other Comonads
+* `Identity a`
+* `(e, a)`
+* Zippers
+* `Trees with values in the branches (Cofree f)`
+* Streams (But not *actual* streaming libraries)
 
 ----
 
 # Uses for Comonads
-Image processing is a natural fit for Cokliesli composition[^#]
 
-we can focus on
+
+Image processing is a natural fit for Cokliesli composition[^#]
 
 
 ```haskell
@@ -109,67 +105,96 @@ lighten :: FocusedImage Pixel -> Pixel
 lighten =>= blur =>= render
 ```
 
+* Celullar automata
+* Sudoku solvers
+
+
 [^#]: https://jaspervdj.be/posts/2014-11-27-comonads-image-processing.html
 
 ----
 
-# What is a UI?
-* The only hard requirement is a rendering function...
+# Component based UI
+
+* Components are small, composable pieces of a UI
+* They live in a hierarchy, the root component is the whole page
+* These components pass messages, usually between parents and children
+* They have their own internal state
 
 . . .
 
-* But we'll also need
+* This usually requires a lot of type variables
+
+----
+
+# Component Example
+
+```haskell
+	data Component s = ...
+```
+<!-- But we also want it to input and output messages to the component -->
+
+. . .
+
+
+```haskell
+	data Component s i o = ...
+```
+<!-- We also want to enumerate all the possible actions of the component can perform, call these q for Queries. And lets make it a functor so we can chuck it in a free monad -->
+
+. . .
+
+```haskell
+	data Component s i o (q :: * -> *) = ...
+```
+<!-- But what about arbitrary effect? Can't forget that right? -->
+
+. . .
+
+```haskell
+	data Component s i o (q :: * -> *) (m :: * -> *) = ...
+```
+
+# Component Example
+
+Adding more type parameters for children, child query type, slot for addressing children yields
+
+![From the Halogen Docs](halogen.png)
+
+----
+
+# Minimalist Components
+
+* The only hard requirement is a rendering function
+
+. . .
+
+* But we also want all the fancy stuff
     * Mutable state
     * initialiser, finaliser
     * preloaded data
     * other effects, etc
 
-. . .
-
-```haskell
-data NaiveUI s h = UI
-  { state :: s
-  , render :: s -> h
-  }
-```
-
-* This would allow us to `fmap` over `h` to render to something else.
-* `UI` admits a comonad instance
-
-----
-
-# The store comonad
-- The `NaiveUI` comonad is usually called `Store`
-
-```haskell
-data Store s a = Store (s -> a) s
-instance Comonad (Store s) where
-  extract (Store render state) = render state
-  duplicate (Store render state)
-    = Store (Store render) state
-
-Store s (Store s a) = Store (s -> Store s a) s
-```
-<!-- The duplicate function looks something -->
-
 ----
 
 # Components using Comonads
 ```haskell
-type Component w = Comonad w => w (UI ())
+type Component w = Comonad w => w UI
 ```
 * `extract` will render the component
 * `duplicate` will explore future states of a component
 <!-- Draw up type of `Store s (Store s a)`, explain how this represents exploration -->
 
 ```haskell
-extract :: Component w -> UI ()               -- render
+extract :: Component w -> UI                  -- render
 duplicate :: Component w -> w (Component w)   -- explode
 select :: x -> w (Component w) -> Component w -- choose
 ```
 <!-- Here we have `duplicate` (explosion) and `select`. -->
 <!-- `select` is a function that takes something that selects a posible future from the model of all posible futures `w (w a)`, using a type called `x`.  -->
 <!-- It's not clear that we can write a general `select` function that does what we want, or what `x` should be. We can start by saying that it should depend on `w` -->
+
+Repeated application of `duplicate` and `select` gives us a way to manipulate the component, but it is not clear what `x` should be
+<!-- Intuitivly, we want something that is the same size as the number of states that `Component w`. For every transition from state a to state b, there should be exactly one way of getting there.  -->
 
 ----
 
@@ -178,16 +203,14 @@ select :: x -> w (Component w) -> Component w -- choose
 
 ```haskell
 -- from Data.Functor.Adjunction (simplified)
-class (Functor f, Functor g) => Adjunction f u where
+class (Functor f, Functor g) => Adjunction f g where
   leftAdjunct :: (f a -> b) -> a -> g b
   rightAdjunct :: (a -> g b) -> f a -> b
 ```
 
-- We call this relationship an **Adjunction**
-<!-- Or we say that f and g are Adjoint -->
 - There are also a set of Adjunction laws
 
-- If we require `Monad g` and `Comonad f`, this is looks like an isomorphism between `Kliesli g` and `Cokliesli f`...
+- If we require `Monad g` and `Comonad f`, this is looks like an isomorphism between `Kliesli g` and `Cokliesli f`
 
 
 <!-- # Adjunctions
@@ -254,8 +277,7 @@ If `w` has a right adjunct `m`, we get a navigation type for free
 ----
 
 # Overview
-We have a new model for modeling UIs. This model can
-  - Eas
+We have a new model for modeling UIs
 
 
 ```haskell
@@ -266,10 +288,16 @@ duplicate :: Component w -> w (Component w)      -- explode
 select :: m () -> w (Component w) -> Component w -- choose
 ```
 
+This is the bare minimum, we need much more than this 
+
 ----
 
-# Applications
-We want to be able to compose comonadic components
+## Other Gadgetry
+* Sums of Components
+* Products of Components
+* Comonad Transformers
+* Monads from Comonads (Action monads for free)
+* Message Passing
 
 ----
 
@@ -309,7 +337,7 @@ data Product f g a = Pair (f a) (g a)
 
 ----
 
-# Comonadic product 
+# Comonadic Product 
 
 Again from **The future is Comonadic**, Freeman suggests using `Day` to represent a comonadic product:
 
@@ -328,7 +356,7 @@ above, below, before, after :: f UI -> g UI -> Day f g UI
 
 ----
 
-# Homogenous Transformers
+# Haskell Transformers
 ## Monad Transformers
 ```haskell
 class MonadTrans t where
@@ -343,9 +371,29 @@ class ComonadTrans t where
   lower :: Comonad w => t w a -> t a
 ```
 
+<!-- These are homogenous transformers -->
+
 ----
 
-# Co
+# Comonad Transformer Stack
+
+As with monads, comonad transformers also preserve comonad nature.
+
+```haskell
+data StoreT s w a = Store (w (s -> a)) s
+```
+
+. . .
+
+As with monads, these transformers have classes so you don't have to dig through the stack
+
+```haskell
+class ComonadStore s w | w -> s where ...
+```
+
+----
+
+# Monads from Comonads
 `Co` is a heterogenous transformer
 
 ```haskell
@@ -355,15 +403,29 @@ instance Comonad w => Monad (Co w) where ...
 
 . . .
 
-Given a comonad `w`, `Co w` is a monad
+<!-- Given a comonad `w`, `Co w` is a monad -->
 
-. . .
-
-Whats more, this new monad `Co w` is right adjunct to `w`, meaning we get a way to move around `w a` for free.
+Whats more, this new monad `Co w` is paired with `w`, meaning we get a way to move around `w a` for free.
 
 ----
 
-# Co Zipper
+# Parents and Children
+
+Using `StoreT`, we can embed child comonads
+
+```haskell
+type Parent = StoreT s Child
+```
+
+We can also lift the actions for the child into actions for the parent
+
+```haskell
+liftAction :: ComonadTrans t => Co w a -> Co (t w) a 
+```
+
+----
+
+# Co Zipper actions
 Zippers are an example of an comonad with no obvious monad pairing.[^#]
 <!-- Using Co to movearound the space of the zipper is a good choice here -->
 
@@ -390,17 +452,25 @@ Given that `Co w` is a monad, why not add another parameter `m` for effects
 newtype CoT w m a = CoT { runCoT :: w (a -> m r) -> m r }
 ```
 
+Since `CoT w` is a monad transformer, we can lift arbitrary effects into
+
+Unfortunatly `CoT w m a` does not pair with `w`. It is unknown how this might be solved.
+
 ----
 
 # Message Passing
-- Use Free Monads:
-    - Functor `QueryF a` to model messages to a component
-    - `eval :: Free QueryF a -> m a` evaluates these messages
-- 
+Use `Cofree f` as a base comonad, where `f` is a query algebra:
+
+`Cofree f` is adjoint to `Free f`, so we have a very familiar way to sequence messages 
 
 ---
 
-# Interesting Ideas
-- Comonad transformer stacks
-- `Day f` is isomorphic to `f`
+# Yet to be solved
+
+## This model has some wrinkles:
+* Message passing between components is not 
+* `CoT w m a` does not pair with `w` anymore 
+
+
+
 
