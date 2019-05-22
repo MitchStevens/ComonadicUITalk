@@ -45,7 +45,7 @@ class Comonad w where
 
 . . .
 
-- `duplicate` explodes out all the states of the transition
+- `duplicate` explodes out all the possible states of the comonad
 <!-- This is less obvious, some examples will be needed if you have never seena comonad before. -->
 
 ----
@@ -94,7 +94,7 @@ instance Comonad NEGraph where
 # Uses for Comonads
 
 
-Image processing is a natural fit for Cokliesli composition[^#]
+Image processing is a natural fit for a comonadic datastructure[^images]
 
 
 ```haskell
@@ -102,14 +102,13 @@ render :: FocusedImage Pixel -> Image
 blur :: FocusedImage Pixel -> Pixel
 lighten :: FocusedImage Pixel -> Pixel
 
+(=>=) :: Comonad w 
+      => (w a -> b) -> (w b -> c) -> w a -> c
+
 lighten =>= blur =>= render
 ```
 
-* Celullar automata
-* Sudoku solvers
-
-
-[^#]: https://jaspervdj.be/posts/2014-11-27-comonads-image-processing.html
+[^images]: https://jaspervdj.be/posts/2014-11-27-comonads-image-processing.html
 
 ----
 
@@ -122,7 +121,7 @@ lighten =>= blur =>= render
 
 . . .
 
-* This usually requires a lot of type variables
+* This can require a lot of type variables
 
 ----
 
@@ -328,7 +327,7 @@ instance (Comonad f, Comonad g) => Comonad (Sum f g) where ...
 ----
 
 # Comonadic Product
-A comonadic product is poses problems; it doesn't have a comonad instance
+A comonadic product poses problems; it doesn't have a comonad instance
 
 ```haskell
 -- from Data.Functor.Product
@@ -368,7 +367,7 @@ class MonadTrans t where
 ## Comonad Transformers
 ```haskell
 class ComonadTrans t where
-  lower :: Comonad w => t w a -> t a
+  lower :: Comonad w => t w a -> w a
 ```
 
 <!-- These are homogenous transformers -->
@@ -393,6 +392,23 @@ class ComonadStore s w | w -> s where ...
 
 ----
 
+# Parents and Children
+
+Using comonad transformers, we can embed child comonads
+
+```haskell
+type Parent UI = StoreT s Child UI
+```
+
+We can also lift the actions for the child into actions for the parent
+
+```haskell
+liftAction :: (ComonadTrans t, Adjunction w m, Adjunction (t w) m'
+           => m a -> m' a 
+```
+
+----
+
 # Monads from Comonads
 `Co` is a heterogenous transformer
 
@@ -405,28 +421,12 @@ instance Comonad w => Monad (Co w) where ...
 
 <!-- Given a comonad `w`, `Co w` is a monad -->
 
-Whats more, this new monad `Co w` is paired with `w`, meaning we get a way to move around `w a` for free.
-
-----
-
-# Parents and Children
-
-Using `StoreT`, we can embed child comonads
-
-```haskell
-type Parent = StoreT s Child
-```
-
-We can also lift the actions for the child into actions for the parent
-
-```haskell
-liftAction :: ComonadTrans t => Co w a -> Co (t w) a 
-```
+This new monad `Co w` is paired with `w`, so we get a way to move around `w a` for free.
 
 ----
 
 # Co Zipper actions
-Zippers are an example of an comonad with no obvious monad pairing.[^#]
+Zippers are an example of an comonad with no obvious monad pairing.[^xavier2018]
 <!-- Using Co to movearound the space of the zipper is a good choice here -->
 
 
@@ -441,7 +441,7 @@ moveLeft = Co $ \z -> extract (left z) ()
 ```
 
 
-[^#]: A Real-World Application with a Comonadic User Interface, Arthur Xavier, 2018
+[^xavier2018]: A Real-World Application with a Comonadic User Interface, Arthur Xavier, 2018
 
 ----
 
@@ -452,24 +452,26 @@ Given that `Co w` is a monad, why not add another parameter `m` for effects
 newtype CoT w m a = CoT { runCoT :: w (a -> m r) -> m r }
 ```
 
-Since `CoT w` is a monad transformer, we can lift arbitrary effects into
+Since `CoT w` is a monad transformer, we can lift arbitrary effects into it
 
-Unfortunatly `CoT w m a` does not pair with `w`. It is unknown how this might be solved.
+. . .
+
+Unfortunatly `CoT w m a` does not pair with `w`.
 
 ----
 
-# Message Passing
+# Bonus (Message Passing)
 Use `Cofree f` as a base comonad, where `f` is a query algebra:
 
-`Cofree f` is adjoint to `Free f`, so we have a very familiar way to sequence messages 
+`Cofree f` is adjoint to `Free f`, so we have a very familiar way to sequence messages
 
 ---
 
 # Yet to be solved
 
 ## This model has some wrinkles:
-* Message passing between components is not 
-* `CoT w m a` does not pair with `w` anymore 
+* Message passing between components is not simple
+* `CoT w m a` does not pair with `w` anymore
 
 
 
